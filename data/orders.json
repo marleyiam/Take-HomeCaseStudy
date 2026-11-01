@@ -1,0 +1,142 @@
+{
+  "_comment": "Mock order database. Dates are stored as offsets from today (placed_days_ago / delivered_days_ago) so that return-window scenarios stay valid whenever the demo runs.",
+  "orders": [
+    {
+      "order_id": "NM-10482",
+      "status": "delivered",
+      "channel": "online",
+      "placed_days_ago": 38,
+      "delivered_days_ago": 34,
+      "customer": {"first_name": "Dana", "loyalty_tier": "member"},
+      "payment_method": "credit_card",
+      "items": [
+        {"sku": "KA-BLND-700", "name": "PowerBlend 700 Blender", "category": "small_appliance", "price": 89.00, "final_sale": false}
+      ]
+    },
+    {
+      "order_id": "NM-10511",
+      "status": "delivered",
+      "channel": "online",
+      "placed_days_ago": 13,
+      "delivered_days_ago": 10,
+      "customer": {"first_name": "Luis", "loyalty_tier": "member"},
+      "payment_method": "credit_card",
+      "items": [
+        {"sku": "EL-LAP-14P", "name": "Zenbook Pro 14 Laptop", "category": "electronics", "price": 1199.00, "final_sale": false}
+      ]
+    },
+    {
+      "order_id": "NM-10530",
+      "status": "delivered",
+      "channel": "online",
+      "placed_days_ago": 24,
+      "delivered_days_ago": 20,
+      "customer": {"first_name": "Priya", "loyalty_tier": "member"},
+      "payment_method": "debit_card",
+      "items": [
+        {"sku": "AP-JKT-RN-M", "name": "Trailline Rain Jacket (M)", "category": "apparel", "price": 129.00, "final_sale": false},
+        {"sku": "AP-JNS-SL-32", "name": "Slim Fit Jeans (32)", "category": "apparel", "price": 59.00, "final_sale": false}
+      ]
+    },
+    {
+      "order_id": "NM-10544",
+      "status": "delivered",
+      "channel": "online",
+      "placed_days_ago": 24,
+      "delivered_days_ago": 22,
+      "customer": {"first_name": "Marcus", "loyalty_tier": "gold"},
+      "payment_method": "credit_card",
+      "items": [
+        {"sku": "EL-HP-NC45", "name": "QuietWave NC45 Headphones", "category": "electronics", "price": 149.00, "final_sale": false}
+      ]
+    },
+    {
+      "order_id": "NM-10433",
+      "status": "delivered",
+      "channel": "online",
+      "placed_days_ago": 45,
+      "delivered_days_ago": 41,
+      "customer": {"first_name": "Grace", "loyalty_tier": "member"},
+      "payment_method": "credit_card",
+      "items": [
+        {"sku": "KA-CM-12C", "name": "BrewMaster 12-Cup Coffee Maker", "category": "small_appliance", "price": 64.00, "final_sale": false}
+      ]
+    },
+    {
+      "order_id": "NM-10455",
+      "status": "delivered",
+      "channel": "online",
+      "placed_days_ago": 37,
+      "delivered_days_ago": 34,
+      "customer": {"first_name": "Tom", "loyalty_tier": "member"},
+      "payment_method": "credit_card",
+      "items": [
+        {"sku": "SP-YOGA-SET", "name": "FlowFit Yoga Mat Set", "category": "general", "price": 45.00, "final_sale": false}
+      ]
+    },
+    {
+      "order_id": "NM-10590",
+      "status": "delivered",
+      "channel": "online",
+      "placed_days_ago": 8,
+      "delivered_days_ago": 5,
+      "customer": {"first_name": "Aisha", "loyalty_tier": "member"},
+      "payment_method": "credit_card",
+      "items": [
+        {"sku": "HM-LMP-ARC-FS", "name": "Arc Floor Lamp (Clearance)", "category": "general", "price": 39.00, "final_sale": true}
+      ]
+    },
+    {
+      "order_id": "NM-10620",
+      "status": "delivered",
+      "channel": "online",
+      "placed_days_ago": 6,
+      "delivered_days_ago": 3,
+      "customer": {"first_name": "Ken", "loyalty_tier": "member"},
+      "payment_method": "credit_card",
+      "items": [
+        {"sku": "EL-TV-55Q", "name": "Vista 55\" QLED TV", "category": "electronics", "price": 649.00, "final_sale": false}
+      ]
+    },
+    {
+      "order_id": "NM-10560",
+      "status": "shipped",
+      "channel": "online",
+      "placed_days_ago": 3,
+      "carrier": "UPS",
+      "tracking_number": "1Z999AA10123456784",
+      "estimated_delivery_in_days": 2,
+      "customer": {"first_name": "Sofia", "loyalty_tier": "gold"},
+      "payment_method": "paypal",
+      "items": [
+        {"sku": "HM-CKW-10P", "name": "10-Piece Cookware Set", "category": "general", "price": 179.00, "final_sale": false}
+      ]
+    },
+    {
+      "order_id": "NM-10575",
+      "status": "delayed",
+      "channel": "online",
+      "placed_days_ago": 12,
+      "carrier": "FedEx",
+      "tracking_number": "7489 2210 4456",
+      "estimated_delivery_in_days": -4,
+      "carrier_note": "Carrier exception: weather delay at regional hub",
+      "customer": {"first_name": "Ben", "loyalty_tier": "member"},
+      "payment_method": "credit_card",
+      "items": [
+        {"sku": "TY-LEGO-CTY", "name": "BrickTown City Set", "category": "general", "price": 79.00, "final_sale": false}
+      ]
+    },
+    {
+      "order_id": "NM-10602",
+      "status": "processing",
+      "channel": "online",
+      "placed_days_ago": 0,
+      "customer": {"first_name": "Elena", "loyalty_tier": "member"},
+      "payment_method": "credit_card",
+      "items": [
+        {"sku": "AP-SNK-RUN-9", "name": "Stride Running Shoes (9)", "category": "apparel", "price": 95.00, "final_sale": false}
+      ]
+    }
+  ]
+}
