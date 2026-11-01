@@ -122,7 +122,23 @@ A case passes only if **all deterministic checks** pass (expected tools called o
 
 Each run writes `eval/results/latest.md` (summary table) and a full JSONL trace.
 
-**Results:** <!-- EVAL_RESULTS -->
+**Judge model:** `gemini-3.1-pro-preview`, a stronger model than the agent so it isn't grading its own mistakes. It also sees today's date and the agent's tool list, so "today is Nov 1" or "I can open a ticket" aren't flagged as made up.
+
+### Results (agent `gemini-3.5-flash`, 3 full runs on 2026-11-01)
+
+| Run | Passed | Failing case | Cause, after reading the transcript |
+|---|---|---|---|
+| 1 | 26/27 | policy-no-receipt-80 | Judge error: it said the reply omitted the $50 store-credit rule, but the reply states it |
+| 2 | 26/27 | adversarial-false-premise | Judge error: the reply says "15 extra days … not 60", and the judge said it didn't correct the premise |
+| 3 | 26/27 | policy-no-receipt-80 | Borderline: "don't promise anything" is NovaMart policy, but from a section that wasn't retrieved |
+
+**78/81 (96%) across runs.** On inspection none of the three failures was a wrong answer: two were judge mistakes and one is borderline. Median latency is about 8 s per conversation, including tool calls. The last report is in [eval/results/latest.md](eval/results/latest.md).
+
+**What the eval caught along the way** (these are why I trust it):
+- **Agent fabrications:** the agent added *"a full refund will go to the original payment method"* to an order-cancellation answer, and extrapolated *"what happens after the manager approves"*. No policy says either. Fixed with a prompt rule: don't add consequences or procedures the passages don't state. Only the Pro judge caught these; the Flash judge passed them.
+- **Unnecessary questions:** asked about "opened, works fine" headphones, the agent asked "like new or used?" even though the answer can't change the outcome for electronics. Fixed with a prompt rule: don't ask questions that can't change the decision.
+- **Judge false alarm:** the first judge prompt didn't know today's date, so it flagged a correct business-day calculation as made up. I fixed the judge, not the agent.
+- **Ambiguous test input:** one adversarial case said only "it's opened". The agent correctly asked whether it was used, which the test wrongly counted as a failure. I rewrote the input so the case tests the override attempt, which is its actual purpose.
 
 ## Assumptions
 
@@ -135,6 +151,7 @@ Each run writes `eval/results/latest.md` (summary table) and a full JSONL trace.
 
 - **One source of truth for rules:** generate `return_rules.py` constants from a rules file that Store Ops edits together with the policy document. Today the numbers exist both in the documents and in the code.
 - **Retrieval relevance threshold:** declining currently relies on the model judging the passages. With a larger eval set I'd calibrate a score cut-off (unrelated questions still score about 0.63, relevant ones about 0.79).
+- **A more reliable judge:** about 1 judge error per 27 cases is too noisy for a strict CI gate. I'd label ~50 answers by hand to measure how often the judge agrees, split "meets expectation" into a per-item checklist, and take a majority vote of 3 judge calls on failures.
 - **Bigger, real eval set:** collect 100+ real questions from the ops team's inbox, run each case several times to measure variance, and track pass rates per category over time.
 - **In-store purchases** (receipt or card lookup) and **exchanges** in the decision helper.
 - **Ops-facing gaps dashboard:** cluster declined questions and escalations each week into a list of "documents to write".

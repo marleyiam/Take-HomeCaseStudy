@@ -16,7 +16,7 @@ import re
 import tempfile
 import time
 from collections import Counter
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 import yaml
@@ -106,8 +106,12 @@ JUDGE_PROMPT = """You are grading an internal retail assistant used by store emp
 Conversation (employee turns and assistant replies):
 {conversation}
 
-Tool outputs the assistant received (the ONLY allowed source of facts):
+Tool outputs the assistant received (the ONLY allowed source of facts, besides today's date):
 {evidence}
+
+The assistant is told today's date in its instructions: {today} ({weekday}).
+Its tools are: search_policies, get_order_status, check_return_eligibility, create_escalation_ticket
+(opens a ticket for the store manager or the operations team). Offering to use them is not a factual claim.
 
 Expected behaviour for the FINAL reply:
 {expect}
@@ -126,7 +130,8 @@ def judge(client: genai.Client, case: dict, run: dict) -> Verdict:
     evidence = json.dumps(run["tool_outputs"], indent=1, default=str)[:20000] or "(no tools called)"
     response = client.models.generate_content(
         model=config.JUDGE_MODEL,
-        contents=JUDGE_PROMPT.format(conversation=conversation, evidence=evidence, expect=case["expect"]),
+        contents=JUDGE_PROMPT.format(conversation=conversation, evidence=evidence, expect=case["expect"],
+                                     today=date.today().isoformat(), weekday=date.today().strftime("%A")),
         config=types.GenerateContentConfig(
             temperature=0, response_mime_type="application/json", response_schema=Verdict
         ),
