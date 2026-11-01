@@ -122,6 +122,10 @@ A case passes only if **all deterministic checks** pass (expected tools called o
 
 Each run writes `eval/results/latest.md` (summary table) and a full JSONL trace.
 
+**Keeping evaluation cheap.** A full run is about 100 API calls: up to 70 agent calls (each tool round trip is one more call), 27 judge calls and about 17 query embeddings. Two things keep it from growing:
+- The judge is only called when all deterministic checks pass. A case that already failed can't be rescued, so there's no point paying for the call.
+- `--rejudge eval/results/run-<stamp>.jsonl` re-grades saved transcripts with the current checks and judge, without re-running the agent. Use it after changing the judge prompt or a case's checks: about 27 calls instead of 100. If a case's `turns` changed, re-run that case with `--only` instead.
+
 **Judge model:** `gemini-3.1-pro-preview`, a stronger model than the agent so it isn't grading its own mistakes. It also sees today's date and the agent's tool list, so "today is Nov 1" or "I can open a ticket" aren't flagged as made up.
 
 ### Results (agent `gemini-3.5-flash`, 3 full runs on 2026-11-01)

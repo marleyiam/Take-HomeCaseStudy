@@ -3,6 +3,7 @@
 Usage:
     python -m eval.run_eval                 # all cases
     python -m eval.run_eval --only decide   # cases whose id contains "decide"
+    python -m eval.run_eval --rejudge eval/results/run-<stamp>.jsonl   # re-grade saved transcripts only
 
 A case passes when every deterministic check passes AND the LLM judge rates the final answer
 both grounded (every claim backed by tool outputs) and meeting the case's expectation.
@@ -141,32 +142,65 @@ def judge(client: genai.Client, case: dict, run: dict) -> Verdict:
 
 # ---------------------------------------------------------------- orchestration
 
+class EvalError(Exception):
+    pass
+
+
+async def with_retries(make_call):
+    """Retries transient API errors (rate limits, 5xx). `make_call` returns a fresh awaitable each attempt."""
+    for attempt in range(3):
+        try:
+            return await make_call()
+        except Exception as exc:  # noqa: BLE001
+            daily_quota = "PerDay" in str(exc)  # free-tier daily cap: retrying won't help
+            if attempt == 2 or daily_quota:
+                raise EvalError("daily API quota exhausted" if daily_quota else f"error: {str(exc)[:200]}") from exc
+            await asyncio.sleep(10 * (attempt + 1))
+
+
+def error_record(case: dict, error: EvalError, run: dict | None = None, latency: float | None = None) -> dict:
+    return {"id": case["id"], "category": case["category"], "passed": False, "failures": [str(error)],
+            "latency_s": latency, "verdict": None, "run": run}
+
+
+async def grade(case: dict, run: dict, latency: float | None, client: genai.Client) -> dict:
+    failures = check_case(case, run)
+    verdict = None
+    # A case that failed a deterministic check can't be rescued by the judge, so don't pay for the call.
+    if not failures:
+        verdict = await with_retries(lambda: asyncio.to_thread(judge, client, case, run))
+        if not verdict.grounded:
+            failures.append("judge: not grounded")
+        if not verdict.meets_expectation:
+            failures.append("judge: expectation not met")
+    return {"id": case["id"], "category": case["category"], "passed": not failures, "failures": failures,
+            "latency_s": latency, "verdict": verdict.model_dump() if verdict else None, "run": run}
+
+
 async def evaluate_case(case: dict, runner: InMemoryRunner, client: genai.Client, sem: asyncio.Semaphore) -> dict:
     async with sem:
-        for attempt in range(3):  # retry transient API errors (rate limits, 5xx)
-            try:
-                started = time.perf_counter()
-                run = await run_conversation(runner, case["turns"])
-                latency = time.perf_counter() - started
-                verdict = await asyncio.to_thread(judge, client, case, run)
-                break
-            except Exception as exc:  # noqa: BLE001
-                daily_quota = "PerDay" in str(exc)  # free-tier daily cap: retrying won't help
-                if attempt == 2 or daily_quota:
-                    error = "daily API quota exhausted" if daily_quota else f"error: {str(exc)[:200]}"
-                    return {"id": case["id"], "category": case["category"], "passed": False,
-                            "failures": [error], "run": None, "verdict": None, "latency_s": None}
-                await asyncio.sleep(10 * (attempt + 1))
-    failures = check_case(case, run)
-    if not verdict.grounded:
-        failures.append("judge: not grounded")
-    if not verdict.meets_expectation:
-        failures.append("judge: expectation not met")
-    return {"id": case["id"], "category": case["category"], "passed": not failures, "failures": failures,
-            "latency_s": round(latency, 1), "verdict": verdict.model_dump(), "run": run}
+        try:
+            started = time.perf_counter()
+            run = await with_retries(lambda: run_conversation(runner, case["turns"]))
+            latency = round(time.perf_counter() - started, 1)
+        except EvalError as exc:
+            return error_record(case, exc)
+        try:
+            return await grade(case, run, latency, client)
+        except EvalError as exc:
+            return error_record(case, exc, run, latency)
 
 
-def write_report(results: list[dict]) -> Path:
+async def rejudge_case(record: dict, case: dict, client: genai.Client, sem: asyncio.Semaphore) -> dict:
+    """Re-grades a saved transcript with the current checks and judge, without re-running the agent."""
+    async with sem:
+        try:
+            return await grade(case, record["run"], record["latency_s"], client)
+        except EvalError as exc:
+            return error_record(case, exc, record["run"], record["latency_s"])
+
+
+def write_report(results: list[dict], source: str) -> Path:
     RESULTS_DIR.mkdir(exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     with (RESULTS_DIR / f"run-{stamp}.jsonl").open("w") as f:
@@ -175,15 +209,17 @@ def write_report(results: list[dict]) -> Path:
 
     by_cat = Counter(r["category"] for r in results)
     passed_cat = Counter(r["category"] for r in results if r["passed"])
-    grounded = sum(1 for r in results if r["verdict"] and r["verdict"]["grounded"])
+    judged = [r for r in results if r["verdict"]]
+    grounded = sum(1 for r in judged if r["verdict"]["grounded"])
     latencies = sorted(r["latency_s"] for r in results if r["latency_s"] is not None)
     lines = [
         f"# Evaluation report — {stamp}",
         "",
-        f"Model: `{config.MODEL}` · Judge: `{config.JUDGE_MODEL}` · Cases: {len(results)}",
+        f"Model: `{config.MODEL}` · Judge: `{config.JUDGE_MODEL}` · Cases: {len(results)} · {source}",
         "",
         f"**Passed: {sum(r['passed'] for r in results)}/{len(results)}** · "
-        f"Grounded (judge): {grounded}/{len(results)} · "
+        f"Grounded (judge): {grounded}/{len(judged)} judged "
+        f"(cases failing a deterministic check are not sent to the judge) · "
         f"Median latency: {latencies[len(latencies) // 2] if latencies else '-'} s",
         "",
         "| Category | Passed |",
@@ -205,20 +241,36 @@ async def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--only", help="run only cases whose id contains this text")
     parser.add_argument("--concurrency", type=int, default=4)
+    parser.add_argument("--rejudge", type=Path, metavar="RUN_JSONL",
+                        help="re-grade the transcripts saved in a previous run (no agent calls), "
+                             "e.g. after changing the judge prompt or a case's checks")
     args = parser.parse_args()
 
     cases = yaml.safe_load((EVAL_DIR / "cases.yaml").read_text())
     if args.only:
         cases = [c for c in cases if args.only in c["id"]]
 
-    runner = InMemoryRunner(agent=root_agent, app_name="novamart_eval")
     client = genai.Client()
     sem = asyncio.Semaphore(args.concurrency)
-    results = await asyncio.gather(*(evaluate_case(c, runner, client, sem) for c in cases))
+    if args.rejudge:
+        # Turns are replayed as saved, so a case whose `turns` changed since that run must be re-run instead.
+        saved = {r["id"]: r for r in map(json.loads, args.rejudge.read_text().splitlines()) if r["run"]}
+        skipped = [c["id"] for c in cases if c["id"] not in saved]
+        if skipped:
+            print(f"No saved transcript for {len(skipped)} case(s), skipping: {', '.join(skipped)}")
+        cases = [c for c in cases if c["id"] in saved]
+        results = await asyncio.gather(*(rejudge_case(saved[c["id"]], c, client, sem) for c in cases))
+        source = f"re-graded from {args.rejudge.name}"
+    else:
+        runner = InMemoryRunner(agent=root_agent, app_name="novamart_eval")
+        results = await asyncio.gather(*(evaluate_case(c, runner, client, sem) for c in cases))
+        source = "fresh agent run"
 
     for r in results:
         print(f"{'PASS' if r['passed'] else 'FAIL'}  {r['id']:<40} {'; '.join(r['failures'])}")
-    report = write_report(results)
+    judge_calls = sum(1 for r in results if r["verdict"])
+    print(f"\nJudge calls: {judge_calls}/{len(results)}")
+    report = write_report(results, source)
     print(f"\n{sum(r['passed'] for r in results)}/{len(results)} passed — report: {report.relative_to(EVAL_DIR.parent)}")
 
 
