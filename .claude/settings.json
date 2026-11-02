@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/bin/pytest:*)",
+      "Bash(.venv/bin/python -m eval.run_eval --only:*)",
+      "Bash(.venv/bin/python -m eval.run_eval --rejudge:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Edit(./.env)",
+      "Bash(cat .env:*)"
+    ]
+  }
+}

@@ -5,3 +5,5 @@ __pycache__/
 data/escalations.jsonl
 eval/results/*.jsonl
 .adk/
+.claude/settings.local.json
+CLAUDE.local.md
