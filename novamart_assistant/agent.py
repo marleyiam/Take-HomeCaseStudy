@@ -12,5 +12,5 @@ root_agent = Agent(
     # A callable instruction is re-evaluated each turn (keeps "today" correct) and skips ADK's {state} templating.
     instruction=build_instruction,
     tools=[search_policies, get_order_status, check_return_eligibility, create_escalation_ticket],
-    generate_content_config=types.GenerateContentConfig(temperature=0.1),
+    generate_content_config=types.GenerateContentConfig(temperature=config.TEMPERATURE),
 )

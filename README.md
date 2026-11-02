@@ -88,7 +88,16 @@ Try these questions: *"Where is order NM-10560?"* · *"Customer wants to return 
 4. **Declining is explicit and testable.** The agent must say a fixed phrase ("I couldn't find this in NovaMart's policies") rather than a hedged half-answer. That lets the evaluation check declines deterministically, and in production it lets us count unanswered questions by topic (see the production note).
 5. **ADK rather than raw function calling.** ADK gives us the tool loop, sessions for multi-turn clarification, a dev UI with tool traces, and a deployment path to Agent Engine and Gemini Enterprise.
 6. **Model: `gemini-3.5-flash`.** It's fast enough for an employee at a counter, and tool use is reliable. On build day `gemini-3.8-flash` returned 503s or took 60–150 s per call, and `gemini-2.5-flash` is no longer available to new keys. The model can be changed with `NOVAMART_MODEL`.
-7. **Mock dates are relative.** Orders store `delivered_days_ago`, so "34 days ago" stays true whenever the demo runs. Without that, every return-window scenario would break within a week.
+7. **Temperature 0.1, tested rather than assumed.** Google's guidance for Gemini 3 models is to keep the default temperature of 1.0, because lower values can cause looping or degrade reasoning. I compared the two on 3 full eval runs each:
+
+   | | 0.1 | 1.0 |
+   |---|---|---|
+   | Passed | 78/81 | 78/81 |
+   | Real agent errors among the failures | 0 | 2 (an invented "POS override" procedure; claimed a "store coupons" policy) |
+   | Median latency | 6.6 s | 7.9 s |
+
+   At 0.1 there was no looping or degraded reasoning. That's expected, since all the maths happens in `return_rules.py`. At 1.0 the agent invented small, plausible procedures more often, which is the worst kind of error for a policy assistant. The sample is small (81 conversations each), so this is a reasoned default, not proof. It can be changed with `NOVAMART_TEMPERATURE` and should be re-tested whenever the model changes.
+8. **Mock dates are relative.** Orders store `delivered_days_ago`, so "34 days ago" stays true whenever the demo runs. Without that, every return-window scenario would break within a week.
 
 ## The creative part: why a return decision helper
 

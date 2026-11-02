@@ -22,5 +22,5 @@ README.md explains the design and decisions; docs/PRODUCTION_NOTE.md must stay a
 - The instruction is a callable (`build_instruction`), which also bypasses ADK's `{state}` templating, so literal braces in the prompt are safe.
 
 ## Gotchas
-- `gemini-2.5-flash` is retired for new API keys. The agent uses `gemini-3.5-flash` and the judge `gemini-3.1-pro-preview`; both can be overridden in `.env`.
+- `gemini-2.5-flash` is retired for new API keys. The agent uses `gemini-3.5-flash` at temperature 0.1 (tested against 1.0, see the README) and the judge `gemini-3.1-pro-preview`; all can be overridden in `.env`.
 - Never read or print `.env` (it holds the API key).
