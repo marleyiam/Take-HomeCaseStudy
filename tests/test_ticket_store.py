@@ -126,3 +126,21 @@ def test_escalation_reference_is_not_repeated_when_the_reply_already_names_it():
     ticket = laptop_ticket(escalation={"ticket_id": "ESC-ABC123", "routed_to": "store_manager"},
                            draft={"reply": "Opened ESC-ABC123 for the manager.", "outcome": "needs_manager"})
     assert compose_outgoing(ticket).count("ESC-ABC123") == 1
+
+
+def test_demo_seeding_only_fills_an_empty_desk(tmp_path):
+    samples = tmp_path / "samples"
+    samples.mkdir()
+    for name in ("01-a.json", "02-b.json"):
+        (samples / name).write_text(json.dumps({"subject": "s", "body": "b"}))
+    store = TicketStore(tmp_path / "desk")
+
+    assert store.seed_from(samples) == 2
+    assert sorted(p.name for p in store.inbox.glob("*.json")) == ["01-a.json", "02-b.json"]
+    assert len(list(samples.glob("*.json"))) == 2   # copied, not moved: the demo can run again
+    assert store.seed_from(samples) == 0            # inbox not empty yet: no duplicates
+
+    for path in store.inbox.glob("*.json"):         # the worker picked them up
+        path.unlink()
+    store.create({"from": "S", "subject": "s", "body": "b"}, source="x.json")
+    assert store.seed_from(samples) == 0            # desk already has tickets: a restart doesn't re-seed

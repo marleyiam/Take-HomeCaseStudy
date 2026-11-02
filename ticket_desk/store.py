@@ -8,6 +8,7 @@
 """
 
 import json
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -146,6 +147,16 @@ class TicketStore:
     def all(self) -> list[dict]:
         return sorted((json.loads(p.read_text()) for p in self.tickets.glob("T-*.json")),
                       key=lambda t: t["id"], reverse=True)
+
+    def seed_from(self, samples: Path) -> int:
+        """Copies the sample tickets into the inbox, but only into an empty desk, so restarting the desk
+        doesn't draft the same samples twice. Returns how many were copied."""
+        if any(self.tickets.glob("T-*.json")) or any(self.inbox.glob("*.json")):
+            return 0
+        files = sorted(samples.glob("*.json"))
+        for path in files:
+            shutil.copy(path, self.inbox / path.name)
+        return len(files)
 
     def drop_in_inbox(self, request: dict) -> Path:
         """Same path as a file dropped by hand: the UI's "new ticket" form writes here too."""

@@ -1,15 +1,17 @@
 # NovaMart Assist
 
-Take-home case study: an internal assistant for NovaMart store employees on Google ADK + Gemini.
-README.md explains the design and decisions; docs/PRODUCTION_NOTE.md must stay at one page (~640 words now); longer material goes in docs/PRODUCTION_DEEP_DIVE.md.
+Take-home case study: an internal assistant for NovaMart store employees on Google ADK + Gemini. Chat is
+the main interface; the ticket desk (drafts replies to store tickets for a human reviewer) is a second
+entry point to the same agent.
+README.md explains the design and decisions; docs/PRODUCTION_NOTE.md must stay at one page.
 
 ## Commands
+- Chat (main): `.venv/bin/adk run novamart_assistant` or `.venv/bin/adk web`
+- Ticket desk: `.venv/bin/python -m ticket_desk` (http://localhost:8080). An empty desk loads the 6 samples on start (~25 paid calls); `--no-samples` skips them
 - Unit tests (no API calls, run after every change): `.venv/bin/pytest -q`
 - One eval case (paid API): `.venv/bin/python -m eval.run_eval --only <case-id-substring>`
 - Re-grade saved transcripts without re-running the agent: `.venv/bin/python -m eval.run_eval --rejudge eval/results/run-<stamp>.jsonl`
-- Full eval (~100 paid calls per run): `.venv/bin/python -m eval.run_eval`
-- Chat: `.venv/bin/adk run novamart_assistant` or `.venv/bin/adk web`
-- Ticket desk: `.venv/bin/python -m ticket_desk` (http://localhost:8080); feed it with `cp data/tickets/samples/*.json data/tickets/inbox/` (~4 paid calls per ticket)
+- Full eval (~100 paid calls per run, chat mode only): `.venv/bin/python -m eval.run_eval`
 
 ## Eval cost policy
 - Iterate with `--only` on the failing cases. If only the judge prompt or a case's checks changed, use `--rejudge`.
