@@ -8,7 +8,7 @@ An internal assistant for NovaMart store employees, built with **Google's Agent 
 - includes a **return decision helper**: it gathers the facts it needs by asking the employee short clarifying questions, applies the return rules deterministically, and answers ✅ approve / ❌ deny / ⚠️ needs manager, with reasons and next steps. When a manager is needed, it opens a pre-filled escalation ticket;
 - works in two modes with the **same agent and tools**: **live chat** for store employees, and a **ticket desk** that drafts replies to the ops team's incoming tickets for a person to approve or revise. See [The ticket desk](#the-ticket-desk-same-agent-on-the-ops-queue).
 
-The production plan is in [docs/PRODUCTION_NOTE.md](docs/PRODUCTION_NOTE.md).
+The production plan is in [docs/PRODUCTION_NOTE.md](docs/PRODUCTION_NOTE.md) (one page), with the details (document pipelines, security against prompt injection and hidden content, maintainability, scaling) in [docs/PRODUCTION_DEEP_DIVE.md](docs/PRODUCTION_DEEP_DIVE.md).
 
 ```
 EMPLOYEE  Customer wants to return a blender.
@@ -42,7 +42,7 @@ pip install -r requirements.txt
 cp .env.example .env   # then put your key in GOOGLE_API_KEY
 ```
 
-To run on Vertex AI instead, set `GOOGLE_GENAI_USE_VERTEXAI=TRUE`, `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION` in `.env`. No code changes are needed.
+To run on Vertex AI instead, set `GOOGLE_GENAI_USE_VERTEXAI=TRUE`, `GOOGLE_CLOUD_PROJECT` and `GOOGLE_CLOUD_LOCATION` in `.env`. This should need no code changes, since ADK and the GenAI client both read these variables, but the Vertex path has not been tested yet.
 
 ## Run it
 

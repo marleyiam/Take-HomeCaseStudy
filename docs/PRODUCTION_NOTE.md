@@ -1,29 +1,41 @@
-# Production note — NovaMart Assist on Google's enterprise stack
+# Production note: NovaMart Assist on Google's enterprise stack
 
-## 1. Gemini Enterprise vs. custom build: both, with a clear split
-- **Gemini Enterprise is the front door.** Employees already sign in with Google. They get one assistant with permission-aware search over connected sources, and plain **policy Q&A needs no custom code**.
-- **Custom ADK agents handle workflows.** The return decision helper needs live order data, deterministic rules, multi-turn fact gathering and write actions. A no-code agent can't test or govern that well. It is this prototype, hardened, deployed on **Vertex AI Agent Engine** and **registered in Gemini Enterprise**, so employees see one assistant. Later workflows (lost orders, price match) follow the same pattern.
-- Going fully custom would mean rebuilding the UI, connectors and access control. Going fully Gemini Enterprise would leave money-related decisions in untested prompts.
+### 1. Gemini Enterprise as the front door, custom agents for the workflows
 
-## 2. Connecting real data
-- **Policies** stay where Store Ops writes them (SharePoint / Drive), synced by a Gemini Enterprise connector (Vertex AI Search data store). This replaces the prototype's local index; the `search_policies` interface stays the same.
-- **Orders:** a **read-only API behind Apigee** in front of the order management system, called with a dedicated service account. It returns only the fields the agent needs (no address or payment data).
-- **Return rules** move from Python constants into a **versioned rules file owned by Store Ops** and reviewed together with the policy text, so the code and the documents can't drift apart.
-- **Escalations** go to the real ticketing tool (ServiceNow / Jira).
+Store employees already sign in with Google, so **Gemini Enterprise is where they meet the assistant**. It gives them permission-aware search over the policy library out of the box, so plain policy questions need no custom code at all.
 
-## 3. Security and governance
-- **Identity:** single sign-on (SSO). The agent acts **on behalf of the employee**, so document permissions apply and order access is scoped by role.
-- **Least privilege:** tools are read-only except ticket creation. **The agent never moves money.** Refunds stay in the POS, and $500+ and goodwill decisions stay with a manager.
-- **Data protection:** VPC Service Controls, customer-managed encryption keys (CMEK) and data residency. Under enterprise terms, prompts are not used for training. **Model Armor** screens for prompt injection and PII leaks.
-- **Audit:** every conversation, tool call and decision is logged to BigQuery with the employee ID and the policy version used. Prompts, model versions and rules are released through CI.
+The workflows that involve live data and money are different. Return decisions, lost orders and price matches need order lookups, deterministic rules and a human in the loop. Those run as **custom ADK agents on Vertex AI Agent Engine**, registered in Gemini Enterprise so employees still see one assistant. The same agents also work the ops team's existing ticket queue, drafting replies that a person approves.
 
-## 4. Evaluating and monitoring quality
-- **Before release:** this repo's eval set (grounded answers, tool use, declines, clarifications, decisions, adversarial cases) is a **CI release gate**, run on every change to the prompt, model, rules or documents, with a minimum pass rate per category. The rules engine has its own unit tests. At scale, move to the Vertex AI Gen AI Evaluation Service.
-- **In production:** ADK OpenTelemetry traces go to Cloud Trace, with dashboards on BigQuery. Key metrics:
-  - **Deflection:** questions resolved without the ops team, against a pre-launch ticket baseline. This is the business KPI.
-  - **Declines and escalations by topic:** a backlog of documents for Store Ops to write.
-  - **Manager override rate:** if managers often reverse the agent, the rules or the policy are wrong.
-  - **Employee feedback** (thumbs up/down), latency and cost.
-- **Ongoing review:** each week an LLM judge checks a sample of conversations for groundedness, with human review of the disagreements. Failures become eval cases. Model versions are pinned, and upgrades go through the eval gate and then a canary rollout.
+The prototype runs on an AI Studio API key because anyone can clone and run it in minutes. Any real GCP environment moves to **Vertex AI**: service accounts instead of long-lived keys, audit logs, enterprise quotas and billing, and direct access to Vertex AI Search, Agent Engine, the evaluation service and BigQuery.
 
-**Rollout:** a 4-week pilot in 3–5 stores, measured on ops ticket volume and employee satisfaction, then a phased rollout.
+### 2. Connecting NovaMart's data
+
+Policies stay where Store Ops writes them (SharePoint, Drive, Confluence) and are indexed by **Vertex AI Search**. Unlike our tidy Markdown files, real policies arrive as PDFs, Word files, web pages and scans, so ingestion parses each format, chunks by layout and tags every chunk with its owner, version and effective date. Structured data, like the product catalog or the recall list, comes from **BigQuery** through dedicated tools rather than text search.
+
+Orders come from a **read-only API behind Apigee**, returning only the fields the agent needs. Return rules move into a versioned rules file owned by Store Ops, and escalations go into ServiceNow or Jira.
+
+### 3. Security
+
+The agent can read and open tickets, but it **never moves money**. Refunds stay in the POS, and the $500 and goodwill decisions stay with a manager. That limits the damage of any mistake or attack.
+
+**PII** is minimized at the source (no addresses or payment data in tool results) and redacted from logs. Tickets, emails and documents are all treated as untrusted. **Model Armor** screens prompts, retrieved passages and replies for injection. Ingestion strips hidden content, such as invisible Unicode, white-on-white text, comments and metadata, before a document can reach the model. Every outgoing ticket reply is still approved by a person.
+
+### 4. Quality, change and scale
+
+The evaluation suite from this repo becomes a **release gate in CI**. It runs whenever prompts, models, rules or documents change, alongside the unit tests for the rules. Prompts, rules and models are versioned, and every answer is logged with the versions it used, so any answer can be traced back.
+
+In production we track:
+- **Deflection:** questions resolved without the ops team.
+- **Draft acceptance:** ticket replies approved without edits.
+- **Declines by topic:** documentation Store Ops should write.
+- **Manager override rate:** where our rules or policies are wrong.
+
+Each week an LLM judge checks a sample of conversations, people review the disagreements, and confirmed failures become new eval cases.
+
+At volume, new tickets arrive through Pub/Sub instead of a folder. Workers scale horizontally and skip tickets already in progress. Session state moves to a managed store, and **provisioned throughput** keeps latency predictable.
+
+### 5. Rollout
+
+We start with the **ticket desk on the ops team's existing queue**. Nobody in the stores changes their habits, and every reply is reviewed, so we can measure accuracy safely. Then comes a **four-week chat pilot in 3 to 5 stores**, then a gradual rollout.
+
+More detail on each of these points: [PRODUCTION_DEEP_DIVE.md](PRODUCTION_DEEP_DIVE.md).
