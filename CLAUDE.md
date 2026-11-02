@@ -1,7 +1,7 @@
 # NovaMart Assist
 
 Take-home case study: an internal assistant for NovaMart store employees on Google ADK + Gemini.
-README.md explains the design and decisions; docs/PRODUCTION_NOTE.md must stay at one page (~600 words now); longer material goes in docs/PRODUCTION_DEEP_DIVE.md.
+README.md explains the design and decisions; docs/PRODUCTION_NOTE.md must stay at one page (~640 words now); longer material goes in docs/PRODUCTION_DEEP_DIVE.md.
 
 ## Commands
 - Unit tests (no API calls, run after every change): `.venv/bin/pytest -q`

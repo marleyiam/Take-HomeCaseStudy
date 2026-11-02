@@ -25,6 +25,22 @@ As soon as the agent runs in any GCP environment (dev, staging or production), i
 4. **Deduplicate and retire.** When a policy is replaced, the old version must stop being served as current.
 5. **Validate before publishing.** Reject documents with no owner, an expired date or hidden content (see Security), and report them to Store Ops.
 
+### Choosing parsing, chunking and embeddings
+
+Google offers two managed paths, with different defaults (checked against Google Cloud's documentation in November 2026; the products are being renamed, so confirm against the current pages):
+
+| | Vertex AI Search data store (now "Agent Search") | Vertex AI RAG Engine |
+|---|---|---|
+| Parsing | Digital, OCR and **layout** parsers | Default parser, **Document AI layout parser** (best for documents with images or charts), or an **LLM parser** that uses Gemini (handles tables, flowcharts and sections spanning slides) |
+| Chunking | Layout-based: chunk size 100–500 tokens (default 500), optional **ancestor headings** added to each chunk | Fixed-size: default 1,024 tokens with 256 overlap, configurable; layout-aware when the layout parser is used |
+| Embeddings | Managed for you | You choose the embedding model per corpus |
+| Vector store | Managed | Managed (Spanner-backed) or your own (e.g. Weaviate, Vertex AI Vector Search) |
+| Fits best when | You want Gemini Enterprise connectors and permission-aware search with little to configure | You need to tune retrieval yourself, or keep vectors in a specific database |
+
+**Starting point:** the Vertex AI Search data store, because it plugs into Gemini Enterprise's connectors and respects document permissions, and those matter more than fine control on day one. Use the **layout parser with ancestor headings**, which is the managed version of what the prototype already does by hand: it splits on `##` headings and embeds each chunk with its document title and section name. Move to RAG Engine only if measured retrieval quality calls for it.
+
+**How to choose with evidence instead of taste:** the eval cases already record which policy section each answer must cite (the `cites` checks). That makes a retrieval benchmark for free: for each question, is the right section in the top results? Run it for each candidate parser, chunk size and embedding model, and keep the best. A rule of thumb to test, not assume: smaller chunks suit short, precise rules like "14 days if opened", while layout chunks keep tables, such as the return-window table, in one piece.
+
 **Structured data** shouldn't be forced into text search. The product catalog, recall list or store directory live in **BigQuery** and get dedicated, typed tools (`get_recall_status(sku)`), the same way orders get an API. Each source has its own sync job (scheduled, or triggered by a change event), and a freshness check alerts when a source stops updating.
 
 ## 3. More complex flows

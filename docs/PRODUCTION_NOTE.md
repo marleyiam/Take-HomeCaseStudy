@@ -10,7 +10,7 @@ The prototype runs on an AI Studio API key because anyone can clone and run it i
 
 ### 2. Connecting NovaMart's data
 
-Policies stay where Store Ops writes them (SharePoint, Drive, Confluence) and are indexed by **Vertex AI Search**. Unlike our tidy Markdown files, real policies arrive as PDFs, Word files, web pages and scans, so ingestion parses each format, chunks by layout and tags every chunk with its owner, version and effective date. Structured data, like the product catalog or the recall list, comes from **BigQuery** through dedicated tools rather than text search.
+Policies stay where Store Ops writes them (SharePoint, Drive, Confluence…) and are indexed by **Vertex AI Search** (now called Agent Search). Real policies are heterogeneous: PDFs, Word files, Markdown, web pages and scans. So ingestion parses each format, chunks by layout and tags every chunk with its owner, version and effective date. Google already offers each of these steps as a managed option, from layout, OCR and LLM-based parsers to configurable chunk sizes and a choice of embedding models. We choose between them by measuring which settings retrieve the right policy section for our eval questions, rather than building our own. Structured data, like the product catalog or the recall list, comes from **BigQuery** through dedicated tools rather than text search.
 
 Orders come from a **read-only API behind Apigee**, returning only the fields the agent needs. Return rules move into a versioned rules file owned by Store Ops, and escalations go into ServiceNow or Jira.
 
