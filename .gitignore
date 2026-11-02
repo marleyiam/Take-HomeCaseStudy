@@ -9,3 +9,4 @@ eval/results/*.jsonl
 CLAUDE.local.md
 data/tickets/*
 !data/tickets/samples/
+.pytest_cache

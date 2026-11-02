@@ -26,6 +26,9 @@ def step(tool, **result):
         ([step("check_return_eligibility", status="decided", decision="NEEDS_MANAGER_APPROVAL"),
           step("create_escalation_ticket", status="created")], "needs_manager", "", "ESCALATED"),
         ([step("search_policies")], "answered", f"{DECLINE_PHRASE}.", "POLICY_GAP"),
+        # A full answer that declines only one sub-point is not a policy gap.
+        ([step("get_order_status", status="found")], "answered",
+         f"You can offer a refund after 3 business days.\n4. Compensation: {DECLINE_PHRASE}.", "ANSWERED"),
         ([step("get_order_status", status="found")], "answered", "It ships tomorrow.", "ANSWERED"),
         ([], "needs_info", "Which order is it?", "NEEDS_INFO"),
     ],

@@ -56,7 +56,7 @@
   .actions { display: flex; gap: 8px; align-items: center; margin-top: 14px; }
   .thread .msg { padding: 8px 12px; border-radius: 8px; margin-bottom: 8px; white-space: pre-wrap; }
   .thread .reviewer { background: var(--info-bg); margin-left: 15%; }
-  .thread .agent { background: var(--quote); margin-right: 15%; }
+  .thread .agent { background: var(--quote); margin-right: 15%; white-space: normal; }
   .thread .who { font-size: 11px; font-weight: 600; color: var(--muted); display: block; }
   .trace li { margin-bottom: 4px; } .trace code { font-size: 12px; }
   details summary { cursor: pointer; color: var(--muted); }
@@ -88,7 +88,7 @@
 const LABELS = { APPROVE: "Approve", DENY: "Deny", NEEDS_MANAGER_APPROVAL: "Needs manager", NEEDS_INFO: "Needs info",
                  POLICY_GAP: "Policy gap", ESCALATED: "Escalated", ANSWERED: "Answered" };
 const STATUS = { drafting: "Drafting…", awaiting_review: "Awaiting review", revising: "Revising…", sent: "Sent", error: "Error" };
-let current = null, busy = false;
+let current = null, busy = false, lastList = "", lastDetail = "";
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 // Minimal Markdown (bold, bullets, headings, citations) — escaped first, so model output can't inject HTML.
@@ -116,6 +116,10 @@ async function api(path, opts = {}) {
 
 async function refreshList() {
   const tickets = await api("/api/tickets");
+  // Only touch the DOM when something changed, so polling never steals focus or resets scroll.
+  const key = JSON.stringify(tickets) + current;
+  if (key === lastList) return;
+  lastList = key;
   document.getElementById("list").innerHTML = tickets.length ? tickets.map(t => `
     <div class="ticket ${t.id === current ? "active" : ""}" onclick="openTicket('${t.id}')">
       <div class="row"><span class="subj">${esc(t.subject)}</span></div>
@@ -128,10 +132,13 @@ async function openTicket(id) { current = id; await refreshList(); await renderD
 async function renderDetail() {
   if (!current) return;
   const t = await api(`/api/tickets/${current}`);
+  const key = JSON.stringify(t);
+  if (key === lastDetail) return;
+  lastDetail = key;
   const working = t.status === "drafting" || t.status === "revising";
   const d = t.draft;
   const trace = t.trace.map(s => `<li><code>${esc(s.tool)}</code> → ${esc(summ(s))}</li>`).join("");
-  const thread = t.thread.map(m => `<div class="msg ${m.role}"><span class="who">${m.role === "agent" ? "Assistant" : "You (reviewer)"}</span>${esc(m.text)}</div>`).join("");
+  const thread = t.thread.map(m => `<div class="msg ${m.role}"><span class="who">${m.role === "agent" ? "Assistant" : "You (reviewer)"}</span>${m.role === "agent" ? `<div class="reply">${md(m.text)}</div>` : esc(m.text)}</div>`).join("");
   document.getElementById("detail").innerHTML = `
     <div class="card">
       <div class="row" style="display:flex;justify-content:space-between;gap:10px;align-items:start">
@@ -203,7 +210,7 @@ document.getElementById("newForm").onsubmit = async e => {
 // Poll: the inbox worker runs in the background, so new tickets and finished drafts appear on their own.
 setInterval(async () => {
   await refreshList();
-  const typing = document.activeElement && document.activeElement.id === "msg" && document.activeElement.value;
+  const typing = document.activeElement && document.activeElement.id === "msg";
   if (current && !busy && !typing) await renderDetail();
 }, 2500);
 refreshList();

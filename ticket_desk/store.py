@@ -47,7 +47,8 @@ def derive_label(trace: list[dict], declared_outcome: str, reply: str) -> str:
             label = "ESCALATED"
     if label:
         return label
-    if DECLINE_PHRASE.lower() in reply.lower():
+    # Only a reply that *is* a decline is a policy gap; an answer that declines one sub-point is still an answer.
+    if reply.strip().lower().startswith(DECLINE_PHRASE.lower()):
         return "POLICY_GAP"
     return {"needs_info": "NEEDS_INFO", "needs_manager": "NEEDS_MANAGER_APPROVAL",
             "policy_gap": "POLICY_GAP"}.get(declared_outcome, "ANSWERED")

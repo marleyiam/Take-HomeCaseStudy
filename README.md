@@ -131,6 +131,18 @@ ticket file → data/tickets/inbox/ ──▶ worker (polls every 2 s) ──▶
 - **Reviewers can revise by chatting.** Each ticket's conversation is saved in SQLite under the ticket id. The reviewer can ask "why deny?", add a fact ("the store confirmed it's unopened"), or ask for a change. The agent keeps the full context, answers, and submits a new draft version, and earlier versions are kept. Nothing reaches the store until a person clicks **Approve & send**, which writes `data/tickets/outbox/<id>.json`.
 - **Failures stay visible.** If an agent run fails (API error, quota), the ticket is marked *Error* with the message, and the reviewer can retry by sending a message.
 
+**Verified by hand, end to end:**
+- **Labels:** the 6 sample tickets came out as Deny, Needs manager, Answered, Needs info, Policy gap and Approve, each matching its scenario.
+- **Revision loop:** for the needs-info ticket, the reviewer typed the store's answer ("the jeans, unworn with tags, changed their mind"). The agent produced draft v2, ✅ Approve $59.00 for the named item, and the label moved from *Needs info* to *Approve* because the rules tool decided it.
+- **Approval:** Approve & send wrote the outgoing message to the outbox.
+
+That run found three issues, now fixed:
+- A full answer with one declined sub-point was labelled *Policy gap*.
+- The agent offered to "forward this to the ops team" in a reply that *is* from the ops team.
+- An approval didn't say which of two items it covered.
+
+Ticket mode isn't in the eval suite yet (see "What I would do with more time").
+
 In production, the inbox folder becomes a ServiceNow / Jira / email trigger (Pub/Sub → the agent on Agent Engine), the outbox becomes the ticket system's reply API, and the SQLite sessions move to a managed session store. The agent, tools and rules don't change.
 
 ## Evaluation
@@ -191,6 +203,7 @@ Each run writes `eval/results/latest.md` (summary table) and a full JSONL trace.
 - **One source of truth for rules:** generate `return_rules.py` constants from a rules file that Store Ops edits together with the policy document. Today the numbers exist both in the documents and in the code.
 - **Retrieval relevance threshold:** declining currently relies on the model judging the passages. With a larger eval set I'd calibrate a score cut-off (unrelated questions still score about 0.63, relevant ones about 0.79).
 - **A more reliable judge:** about 1 judge error per 27 cases is too noisy for a strict CI gate. I'd label ~50 answers by hand to measure how often the judge agrees, split "meets expectation" into a per-item checklist, and take a majority vote of 3 judge calls on failures.
+- **Eval cases for ticket mode:** run the sample tickets through the ticket agent with expected labels and a judge check on the draft, including a revision turn. Today ticket mode is verified by hand only.
 - **Bigger, real eval set:** collect 100+ real questions from the ops team's inbox, run each case several times to measure variance, and track pass rates per category over time.
 - **In-store purchases** (receipt or card lookup) and **exchanges** in the decision helper.
 - **Ops-facing gaps dashboard:** cluster declined questions and escalations each week into a list of "documents to write".
