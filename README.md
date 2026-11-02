@@ -49,7 +49,7 @@ To run on Vertex AI instead, set `GOOGLE_GENAI_USE_VERTEXAI=TRUE`, `GOOGLE_CLOUD
 |---|---|
 | Chat UI (ADK dev UI, shows every tool call) | `adk web` → open http://localhost:8000 and pick `novamart_assistant` |
 | Chat in the terminal | `adk run novamart_assistant` |
-| Evaluation suite (27 conversations, LLM-judged) | `python -m eval.run_eval` (`--only decide` to filter) |
+| Evaluation suite (28 conversations, LLM-judged) | `python -m eval.run_eval` (`--only decide` to filter) |
 | Unit tests for the return rules (no API key needed) | `pytest -q` |
 
 Try these questions: *"Where is order NM-10560?"* · *"Customer wants to return order NM-10530"* · *"NM-10511, laptop opened, changed their mind"* · *"What's the employee discount?"*. The mock orders are listed in [data/orders.json](data/orders.json).
@@ -114,7 +114,7 @@ There are two layers.
 
 **1. Unit tests** (`pytest`, 20 tests) cover every branch of the rules engine and the order lookup. They're deterministic, so they always run in CI.
 
-**2. Conversation evals** (`python -m eval.run_eval`): 27 conversations in [eval/cases.yaml](eval/cases.yaml), some of them multi-turn, across six categories:
+**2. Conversation evals** (`python -m eval.run_eval`): 28 conversations in [eval/cases.yaml](eval/cases.yaml), some of them multi-turn, across six categories:
 
 | Category | What it checks |
 |---|---|
@@ -131,9 +131,9 @@ A case passes only if **all deterministic checks** pass (expected tools called o
 
 Each run writes `eval/results/latest.md` (summary table) and a full JSONL trace.
 
-**Keeping evaluation cheap.** A full run is about 100 API calls: up to 70 agent calls (each tool round trip is one more call), 27 judge calls and about 17 query embeddings. Two things keep it from growing:
+**Keeping evaluation cheap.** A full run is about 100 API calls: up to 70 agent calls (each tool round trip is one more call), 28 judge calls and about 17 query embeddings. Two things keep it from growing:
 - The judge is only called when all deterministic checks pass. A case that already failed can't be rescued, so there's no point paying for the call.
-- `--rejudge eval/results/run-<stamp>.jsonl` re-grades saved transcripts with the current checks and judge, without re-running the agent. Use it after changing the judge prompt or a case's checks: about 27 calls instead of 100. If a case's `turns` changed, re-run that case with `--only` instead.
+- `--rejudge eval/results/run-<stamp>.jsonl` re-grades saved transcripts with the current checks and judge, without re-running the agent. Use it after changing the judge prompt or a case's checks: about 28 calls instead of 100. If a case's `turns` changed, re-run that case with `--only` instead.
 
 **Judge model:** `gemini-3.1-pro-preview`, a stronger model than the agent so it isn't grading its own mistakes. It also sees today's date and the agent's tool list, so "today is Nov 1" or "I can open a ticket" aren't flagged as made up.
 
@@ -145,11 +145,12 @@ Each run writes `eval/results/latest.md` (summary table) and a full JSONL trace.
 | 2 | 26/27 | adversarial-false-premise | Judge error: the reply says "15 extra days … not 60", and the judge said it didn't correct the premise |
 | 3 | 26/27 | policy-no-receipt-80 | Borderline: "don't promise anything" is NovaMart policy, but from a section that wasn't retrieved |
 
-**78/81 (96%) across runs.** On inspection none of the three failures was a wrong answer: two were judge mistakes and one is borderline. Median latency is about 8 s per conversation, including tool calls. The last report is in [eval/results/latest.md](eval/results/latest.md).
+**78/81 (96%) across runs.** On inspection none of the three failures was a wrong answer: two were judge mistakes and one is borderline. Median latency is about 8 s per conversation, including tool calls. The last report is in [eval/results/latest.md](eval/results/latest.md). These runs used the original 27 cases; the 28th case (`decide-apparel-tags-off`) was added afterwards and passed 3/3 on its own, with the 4 `clarify-*` cases re-run to check nothing regressed.
 
 **What the eval caught along the way** (these are why I trust it):
 - **Agent fabrications:** the agent added *"a full refund will go to the original payment method"* to an order-cancellation answer, and extrapolated *"what happens after the manager approves"*. No policy says either. Fixed with a prompt rule: don't add consequences or procedures the passages don't state. Only the Pro judge caught these; the Flash judge passed them.
 - **Unnecessary questions:** asked about "opened, works fine" headphones, the agent asked "like new or used?" even though the answer can't change the outcome for electronics. Fixed with a prompt rule: don't ask questions that can't change the decision.
+- **A gap the eval missed, found in a manual demo:** the employee said "wore it once, tags are off", and the agent still asked "tried on, or worn?". The cause was my own prompt hint ("used it once" is ambiguous for apparel), followed literally. I fixed it by mapping decisive details ("tags off", "worn", "washed") straight to a condition, and added the conversation as a new case. Real usage keeps finding what a test set doesn't cover, which is why production conversations should feed back into the cases.
 - **Judge false alarm:** the first judge prompt didn't know today's date, so it flagged a correct business-day calculation as made up. I fixed the judge, not the agent.
 - **Ambiguous test input:** one adversarial case said only "it's opened". The agent correctly asked whether it was used, which the test wrongly counted as a failure. I rewrote the input so the case tests the override attempt, which is its actual purpose.
 

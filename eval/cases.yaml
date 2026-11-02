@@ -194,6 +194,15 @@
   cites: [damaged-defective-and-wrong-items]
   expect: Approves a full $39 refund or replacement even though it's Final Sale, because damage on arrival was reported within 14 days.
 
+- id: decide-apparel-tags-off
+  category: decision
+  # Found while demoing: "tags are off" already settles the condition, but the agent asked "tried on or worn?".
+  turns: ["Order NM-10530, the jacket. They wore it once, tags are off, they just don't like the color."]
+  tools_called: [check_return_eligibility]
+  decision: DENY
+  cites: [returns-and-refunds]
+  expect: Decides without asking about the condition (tags removed means worn) — denies because change-of-mind apparel returns must be unworn with tags.
+
 - id: decide-defective-past-window
   category: decision
   turns: ["NM-10433: the coffee maker stopped working. It was opened and used normally, no damage."]
