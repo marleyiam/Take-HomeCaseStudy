@@ -61,7 +61,7 @@ def compose_outgoing(ticket: dict) -> str:
     reply = ticket["draft"]["reply"] if ticket.get("draft") else ""
     escalation = ticket.get("escalation")
     reference = ""
-    if escalation:
+    if escalation and escalation["ticket_id"] not in reply:  # the agent may already have named it
         what = ("Store manager approval requested" if escalation["routed_to"] == "store_manager"
                 else "Forwarded to the operations team")
         reference = f"\n\n{what}: ticket {escalation['ticket_id']}."

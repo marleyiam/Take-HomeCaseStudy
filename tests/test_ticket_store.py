@@ -120,3 +120,9 @@ def test_outgoing_message_carries_the_escalation_reference():
     message = compose_outgoing(ticket)
     assert "Store manager approval requested: ticket ESC-ABC123." in message
     assert message.index("ESC-ABC123") < message.index("— NovaMart Operations")
+
+
+def test_escalation_reference_is_not_repeated_when_the_reply_already_names_it():
+    ticket = laptop_ticket(escalation={"ticket_id": "ESC-ABC123", "routed_to": "store_manager"},
+                           draft={"reply": "Opened ESC-ABC123 for the manager.", "outcome": "needs_manager"})
+    assert compose_outgoing(ticket).count("ESC-ABC123") == 1
