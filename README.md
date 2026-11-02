@@ -5,7 +5,8 @@ An internal assistant for NovaMart store employees, built with **Google's Agent 
 - answers policy questions **only from NovaMart's documents**, with a citation for every fact;
 - looks up **live order status** through a (mock) order API;
 - **declines** when the policies don't cover a question, and offers to forward it to the ops team;
-- includes a **return decision helper**: it gathers the facts it needs by asking the employee short clarifying questions, applies the return rules deterministically, and answers ✅ approve / ❌ deny / ⚠️ needs manager, with reasons and next steps. When a manager is needed, it opens a pre-filled escalation ticket.
+- includes a **return decision helper**: it gathers the facts it needs by asking the employee short clarifying questions, applies the return rules deterministically, and answers ✅ approve / ❌ deny / ⚠️ needs manager, with reasons and next steps. When a manager is needed, it opens a pre-filled escalation ticket;
+- works in two modes with the **same agent and tools**: **live chat** for store employees, and a **ticket desk** that drafts replies to the ops team's incoming tickets for a person to approve or revise. See [The ticket desk](#the-ticket-desk-same-agent-on-the-ops-queue).
 
 The production plan is in [docs/PRODUCTION_NOTE.md](docs/PRODUCTION_NOTE.md).
 
@@ -49,6 +50,7 @@ To run on Vertex AI instead, set `GOOGLE_GENAI_USE_VERTEXAI=TRUE`, `GOOGLE_CLOUD
 |---|---|
 | Chat UI (ADK dev UI, shows every tool call) | `adk web` → open http://localhost:8000 and pick `novamart_assistant` |
 | Chat in the terminal | `adk run novamart_assistant` |
+| Ticket desk (inbox worker + review UI) | `python -m ticket_desk` → open http://localhost:8080, then `cp data/tickets/samples/*.json data/tickets/inbox/` |
 | Evaluation suite (28 conversations, LLM-judged) | `python -m eval.run_eval` (`--only decide` to filter) |
 | Unit tests for the return rules (no API key needed) | `pytest -q` |
 
@@ -78,7 +80,9 @@ Try these questions: *"Where is order NM-10560?"* · *"Customer wants to return 
 | `data/policies/` | 9 invented NovaMart policy documents |
 | `data/orders.json` | Mock orders, one per return scenario |
 | `eval/` | Eval cases (YAML), runner and LLM judge, reports in `eval/results/` |
-| `tests/` | Unit tests for the rules engine and the order tool |
+| `ticket_desk/` | Inbox worker, file-based ticket store, review API and UI (`static/index.html`) |
+| `data/tickets/samples/` | 6 sample tickets to drop into the inbox |
+| `tests/` | Unit tests for the rules engine, the order tool and the ticket store |
 
 ## Key decisions
 
@@ -107,6 +111,27 @@ From the store employee's point of view, the hard requests aren't "what is the p
 - **asks rather than guesses**, at most two short questions at a time, skipping anything the order already tells it;
 - **knows its authority:** a refund above $500 or a goodwill exception isn't "approved" by the bot. It tells the employee not to promise anything, and with one "yes" it files a manager ticket that already contains every fact checked. The manager doesn't have to call the employee back;
 - **gives the ops team data:** escalation tickets (`data/escalations.jsonl`) and declined questions show where policies are unclear or missing.
+
+## The ticket desk: same agent on the ops queue
+
+Chat prevents tickets, but only once store staff adopt a new tool. Meanwhile the requests keep arriving in the ops team's queue. The ticket desk puts the same agent to work on that queue, and store staff don't have to change anything.
+
+```
+ticket file → data/tickets/inbox/ ──▶ worker (polls every 2 s) ──▶ ticket agent ──▶ draft ──▶ review UI
+                                                                     ▲                       │
+                                       "REVIEWER: <question/fact/change>" (same session) ◀───┤ revise
+                                                                                             │ approve
+                                                                       data/tickets/outbox/ ◀┘
+```
+
+- **A ticket is a file:** a JSON file dropped into `data/tickets/inbox/` (`{"from", "subject", "body"}`). The UI's "New ticket" form writes to the same folder, so there's one way in. Invalid files go to `rejected/`, and processed originals to `processed/`.
+- **The draft has two parts.** The store's request is quoted verbatim by code, not the LLM, so it can't be misquoted. Below it comes the agent's reply, in the same format as in chat (decision, why with citations, next steps). If facts are missing, the reply asks for all of them at once, because there's no live back-and-forth. An optional *note to reviewer* carries assumptions and risks that the store shouldn't see.
+- **The agent submits its draft through a tool** (`submit_draft`) instead of us parsing its chat text, so the draft is always exactly what it chose to send.
+- **Queue labels come from tool results** (Approve / Deny / Needs manager / Needs info / Escalated), not from the LLM's own claim. The agent's declared outcome is used only when no tool decided, e.g. a policy question or a policy gap.
+- **Reviewers can revise by chatting.** Each ticket's conversation is saved in SQLite under the ticket id. The reviewer can ask "why deny?", add a fact ("the store confirmed it's unopened"), or ask for a change. The agent keeps the full context, answers, and submits a new draft version, and earlier versions are kept. Nothing reaches the store until a person clicks **Approve & send**, which writes `data/tickets/outbox/<id>.json`.
+- **Failures stay visible.** If an agent run fails (API error, quota), the ticket is marked *Error* with the message, and the reviewer can retry by sending a message.
+
+In production, the inbox folder becomes a ServiceNow / Jira / email trigger (Pub/Sub → the agent on Agent Engine), the outbox becomes the ticket system's reply API, and the SQLite sessions move to a managed session store. The agent, tools and rules don't change.
 
 ## Evaluation
 

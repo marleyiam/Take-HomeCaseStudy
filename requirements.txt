@@ -1,4 +1,4 @@
-google-adk>=2.13
+google-adk[db]>=2.13
 google-genai>=2.34
 python-dotenv
 pyyaml

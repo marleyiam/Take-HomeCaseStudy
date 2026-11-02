@@ -7,3 +7,5 @@ eval/results/*.jsonl
 .adk/
 .claude/settings.local.json
 CLAUDE.local.md
+data/tickets/*
+!data/tickets/samples/

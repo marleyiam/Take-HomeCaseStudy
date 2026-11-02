@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NovaMart Ticket Desk</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #667085; --border: #e3e6eb;
+    --accent: #2f5bd3; --accent-text: #ffffff; --quote: #f0f2f6;
+    --ok: #157f3b; --ok-bg: #e5f5ea; --bad: #b42318; --bad-bg: #fde9e7;
+    --warn: #93600a; --warn-bg: #fdf1d8; --info: #2f5bd3; --info-bg: #e7edfb; --gray-bg: #eceef2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151b; --panel: #1a1e26; --text: #e6e8ec; --muted: #98a0ae; --border: #2b313c;
+      --accent: #6d8ff0; --accent-text: #0d1120; --quote: #222833;
+      --ok: #6fd28f; --ok-bg: #173323; --bad: #f2877c; --bad-bg: #3a1c19;
+      --warn: #f0c46b; --warn-bg: #3a2e14; --info: #93acf5; --info-bg: #1d2742; --gray-bg: #272c36;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid var(--border); background: var(--panel); }
+  header h1 { font-size: 16px; margin: 0; }
+  header .sub { color: var(--muted); font-size: 12px; }
+  main { display: grid; grid-template-columns: 340px 1fr; height: calc(100vh - 57px); }
+  @media (max-width: 800px) { main { grid-template-columns: 1fr; height: auto; } }
+  aside { border-right: 1px solid var(--border); overflow-y: auto; background: var(--panel); }
+  section#detail { overflow-y: auto; padding: 20px 24px 40px; }
+  button { font: inherit; border-radius: 6px; border: 1px solid var(--border); background: var(--panel); color: var(--text); padding: 6px 12px; cursor: pointer; }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  input, textarea { font: inherit; width: 100%; padding: 7px 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); }
+  textarea { resize: vertical; }
+  .ticket { padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .ticket:hover { background: var(--bg); }
+  .ticket.active { background: var(--info-bg); }
+  .ticket .row { display: flex; gap: 6px; align-items: center; justify-content: space-between; }
+  .ticket .subj { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ticket .meta { color: var(--muted); font-size: 12px; }
+  .chip { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 99px; white-space: nowrap; background: var(--gray-bg); color: var(--muted); }
+  .chip.APPROVE, .chip.ANSWERED, .chip.sent { background: var(--ok-bg); color: var(--ok); }
+  .chip.DENY, .chip.error { background: var(--bad-bg); color: var(--bad); }
+  .chip.NEEDS_MANAGER_APPROVAL, .chip.ESCALATED, .chip.POLICY_GAP { background: var(--warn-bg); color: var(--warn); }
+  .chip.NEEDS_INFO, .chip.awaiting_review { background: var(--info-bg); color: var(--info); }
+  .chips { display: flex; gap: 4px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; margin-bottom: 16px; }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 10px; }
+  .title { font-size: 20px; font-weight: 700; margin: 0 0 4px; }
+  .muted { color: var(--muted); }
+  blockquote { margin: 8px 0 14px; padding: 8px 12px; border-left: 3px solid var(--border); background: var(--quote); white-space: pre-wrap; border-radius: 0 6px 6px 0; }
+  .reply p { margin: 6px 0; } .reply ul { margin: 4px 0 8px; padding-left: 20px; } .reply h4 { margin: 10px 0 4px; }
+  .note { background: var(--warn-bg); color: var(--text); border-radius: 8px; padding: 10px 12px; margin-top: 12px; }
+  .note b { color: var(--warn); }
+  .actions { display: flex; gap: 8px; align-items: center; margin-top: 14px; }
+  .thread .msg { padding: 8px 12px; border-radius: 8px; margin-bottom: 8px; white-space: pre-wrap; }
+  .thread .reviewer { background: var(--info-bg); margin-left: 15%; }
+  .thread .agent { background: var(--quote); margin-right: 15%; }
+  .thread .who { font-size: 11px; font-weight: 600; color: var(--muted); display: block; }
+  .trace li { margin-bottom: 4px; } .trace code { font-size: 12px; }
+  details summary { cursor: pointer; color: var(--muted); }
+  .empty { color: var(--muted); padding: 40px; text-align: center; }
+  .newform { padding: 12px 14px; border-bottom: 1px solid var(--border); display: grid; gap: 6px; }
+  .newform[hidden] { display: none; }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; vertical-align: -2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<header>
+  <div><h1>NovaMart Ticket Desk</h1><div class="sub">Store tickets drafted by the assistant, approved by the ops team</div></div>
+  <button id="toggleNew">+ New ticket</button>
+</header>
+<main>
+  <aside>
+    <form class="newform" id="newForm" hidden>
+      <input id="nFrom" placeholder="From (e.g. Store #112 – Dana, service desk)">
+      <input id="nSubject" placeholder="Subject" required>
+      <textarea id="nBody" rows="4" placeholder="What does the store need?" required></textarea>
+      <button class="primary" type="submit">Drop in inbox</button>
+    </form>
+    <div id="list"></div>
+  </aside>
+  <section id="detail"><div class="empty">Select a ticket. New tickets appear here as files land in <code>data/tickets/inbox/</code>.</div></section>
+</main>
+<script>
+const LABELS = { APPROVE: "Approve", DENY: "Deny", NEEDS_MANAGER_APPROVAL: "Needs manager", NEEDS_INFO: "Needs info",
+                 POLICY_GAP: "Policy gap", ESCALATED: "Escalated", ANSWERED: "Answered" };
+const STATUS = { drafting: "Drafting…", awaiting_review: "Awaiting review", revising: "Revising…", sent: "Sent", error: "Error" };
+let current = null, busy = false;
+
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+// Minimal Markdown (bold, bullets, headings, citations) — escaped first, so model output can't inject HTML.
+function md(text) {
+  const out = []; let list = false;
+  for (const raw of esc(text).split("\n")) {
+    const line = raw.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+    const bullet = line.match(/^\s*(?:[-*•]|\d+\.)\s+(.*)/);
+    if (bullet) { if (!list) { out.push("<ul>"); list = true; } out.push(`<li>${bullet[1]}</li>`); continue; }
+    if (list) { out.push("</ul>"); list = false; }
+    const h = line.match(/^#{1,4}\s+(.*)/);
+    if (h) out.push(`<h4>${h[1]}</h4>`); else if (line.trim()) out.push(`<p>${line}</p>`);
+  }
+  if (list) out.push("</ul>");
+  return out.join("");
+}
+const chips = t => `<span class="chips">${t.label ? `<span class="chip ${t.label}">${LABELS[t.label] || t.label}</span>` : ""}<span class="chip ${t.status}">${STATUS[t.status]}</span></span>`;
+const time = iso => iso ? new Date(iso).toLocaleString([], {dateStyle: "short", timeStyle: "short"}) : "";
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, { headers: {"Content-Type": "application/json"}, ...opts });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  return r.json();
+}
+
+async function refreshList() {
+  const tickets = await api("/api/tickets");
+  document.getElementById("list").innerHTML = tickets.length ? tickets.map(t => `
+    <div class="ticket ${t.id === current ? "active" : ""}" onclick="openTicket('${t.id}')">
+      <div class="row"><span class="subj">${esc(t.subject)}</span></div>
+      <div class="row"><span class="meta">${t.id} · ${esc(t.from)}</span>${chips(t)}</div>
+    </div>`).join("") : `<div class="empty">Inbox is empty.<br>Drop a JSON file into <code>data/tickets/inbox/</code> or use “New ticket”.</div>`;
+}
+
+async function openTicket(id) { current = id; await refreshList(); await renderDetail(); }
+
+async function renderDetail() {
+  if (!current) return;
+  const t = await api(`/api/tickets/${current}`);
+  const working = t.status === "drafting" || t.status === "revising";
+  const d = t.draft;
+  const trace = t.trace.map(s => `<li><code>${esc(s.tool)}</code> → ${esc(summ(s))}</li>`).join("");
+  const thread = t.thread.map(m => `<div class="msg ${m.role}"><span class="who">${m.role === "agent" ? "Assistant" : "You (reviewer)"}</span>${esc(m.text)}</div>`).join("");
+  document.getElementById("detail").innerHTML = `
+    <div class="card">
+      <div class="row" style="display:flex;justify-content:space-between;gap:10px;align-items:start">
+        <div><p class="title">${esc(t.subject)}</p><div class="muted">${t.id} · ${esc(t.from)} · received ${time(t.received_at)}</div></div>
+        ${chips(t)}
+      </div>
+    </div>
+    <div class="card">
+      <h2>Outgoing message ${d ? `· draft v${d.version}` : ""}</h2>
+      <div class="muted">Re: ${esc(t.subject)} — to ${esc(t.from)}</div>
+      <blockquote>${esc(t.body)}</blockquote>
+      ${working && !d ? `<p><span class="spinner"></span> The assistant is working on this ticket…</p>` : ""}
+      ${d ? `<div class="reply">${md(d.reply)}</div>` : ""}
+      ${d && d.note ? `<div class="note"><b>Note to reviewer:</b> ${esc(d.note)}</div>` : ""}
+      ${t.error ? `<div class="note"><b>Error:</b> ${esc(t.error)} — send a message below to retry.</div>` : ""}
+      <div class="actions">
+        ${t.status === "sent" ? `<span class="chip sent">Sent ${time(t.sent_at)}</span><span class="muted">Written to data/tickets/outbox/${t.id}.json</span>`
+          : `<button class="primary" onclick="approve()" ${t.status !== "awaiting_review" || !d ? "disabled" : ""}>Approve &amp; send</button>
+             ${working ? `<span class="muted"><span class="spinner"></span> ${STATUS[t.status]}</span>` : `<span class="muted">or ask for changes below</span>`}`}
+      </div>
+    </div>
+    ${t.status !== "sent" ? `<div class="card">
+      <h2>Revise with the assistant</h2>
+      <div class="thread">${thread || `<p class="muted">Ask a question, add a fact the store confirmed, or request a change. The assistant keeps the full context of this ticket.</p>`}</div>
+      <form onsubmit="send(event)" style="display:flex;gap:8px;margin-top:8px">
+        <input id="msg" placeholder="e.g. The store confirmed the box is unopened — update the reply" ${working ? "disabled" : ""}>
+        <button class="primary" ${working ? "disabled" : ""}>Send</button>
+      </form>
+    </div>` : ""}
+    <div class="card">
+      <details><summary>What the assistant checked (${t.trace.length} tool calls)</summary><ul class="trace">${trace}</ul></details>
+      ${t.drafts.length > 1 ? `<details><summary>Earlier drafts (${t.drafts.length - 1})</summary>${t.drafts.slice(0, -1).reverse().map(x => `<h4>v${x.version}</h4><div class="reply">${md(x.reply)}</div>`).join("")}</details>` : ""}
+    </div>`;
+}
+
+function summ(s) {
+  const r = s.result || {};
+  if (s.tool === "search_policies") return (r.citations || []).join("; ");
+  if (s.tool === "get_order_status") return r.status === "found" ? `${r.order.order_id}: ${r.order.status}` : r.status;
+  if (s.tool === "check_return_eligibility") return r.decision ? `${r.decision} — refund $${r.refund_amount}` : `${r.status}${r.missing ? ": missing " + Object.keys(r.missing).join(", ") : ""}`;
+  if (s.tool === "create_escalation_ticket") return `${r.ticket_id || r.status} → ${r.routed_to || ""}`;
+  return JSON.stringify(r).slice(0, 120);
+}
+
+async function send(e) {
+  e.preventDefault();
+  const input = document.getElementById("msg"); const text = input.value.trim(); if (!text) return;
+  busy = true; input.value = "";
+  const p = api(`/api/tickets/${current}/messages`, { method: "POST", body: JSON.stringify({ text }) });
+  setTimeout(renderDetail, 300);  // shows the "revising" state while the assistant works
+  try { await p; } catch (err) { alert(err.message); } finally { busy = false; }
+  await renderDetail(); await refreshList();
+}
+
+async function approve() {
+  try { await api(`/api/tickets/${current}/approve`, { method: "POST" }); } catch (err) { alert(err.message); }
+  await renderDetail(); await refreshList();
+}
+
+document.getElementById("toggleNew").onclick = () => { const f = document.getElementById("newForm"); f.hidden = !f.hidden; };
+document.getElementById("newForm").onsubmit = async e => {
+  e.preventDefault();
+  try {
+    await api("/api/tickets", { method: "POST", body: JSON.stringify({ sender: nFrom.value, subject: nSubject.value, body: nBody.value }) });
+    nSubject.value = nBody.value = ""; e.target.hidden = true;
+  } catch (err) { alert(err.message); }
+};
+
+// Poll: the inbox worker runs in the background, so new tickets and finished drafts appear on their own.
+setInterval(async () => {
+  await refreshList();
+  const typing = document.activeElement && document.activeElement.id === "msg" && document.activeElement.value;
+  if (current && !busy && !typing) await renderDetail();
+}, 2500);
+refreshList();
+</script>
+</body>
+</html>

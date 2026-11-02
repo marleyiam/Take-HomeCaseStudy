@@ -130,6 +130,24 @@ def check_return_eligibility(order_id: str, sku: str = "", item_condition: str =
     return {"status": "decided", **evaluate_return(order, item, item_condition, return_reason)}
 
 
+def submit_draft(reply_to_store: str, outcome: str, note_to_reviewer: str = "") -> dict:
+    """Saves your draft reply to the current ticket so the ops-team reviewer can approve it. Call it again with
+    the full text whenever the reply changes; the latest call replaces the previous draft.
+
+    Args:
+        reply_to_store: The complete reply to the store employee (decision, why with citations, next steps,
+            or the questions they must answer). Don't quote their original request; it is added automatically.
+        outcome: One of: answered (the reply resolves the request), needs_info (the reply asks the store for
+            missing facts), needs_manager (a manager must approve), policy_gap (the policies don't cover it).
+        note_to_reviewer: Optional note only the reviewer sees: assumptions, risks, escalation recommendation.
+
+    Returns:
+        Confirmation that the draft was saved.
+    """
+    # The ticket desk reads the arguments from the function-call event, so nothing needs to be stored here.
+    return {"status": "saved", "message": "Draft saved and shown to the reviewer."}
+
+
 def create_escalation_ticket(
     escalation_type: str,
     customer_request: str,

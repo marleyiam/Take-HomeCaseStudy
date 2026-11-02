@@ -6,6 +6,12 @@
       "runtimeExecutable": ".venv/bin/adk",
       "runtimeArgs": ["web", "--port", "8000"],
       "port": 8000
+    },
+    {
+      "name": "ticket-desk",
+      "runtimeExecutable": ".venv/bin/python",
+      "runtimeArgs": ["-m", "ticket_desk"],
+      "port": 8080
     }
   ]
 }

@@ -9,6 +9,7 @@ README.md explains the design and decisions; docs/PRODUCTION_NOTE.md must stay a
 - Re-grade saved transcripts without re-running the agent: `.venv/bin/python -m eval.run_eval --rejudge eval/results/run-<stamp>.jsonl`
 - Full eval (~100 paid calls per run): `.venv/bin/python -m eval.run_eval`
 - Chat: `.venv/bin/adk run novamart_assistant` or `.venv/bin/adk web`
+- Ticket desk: `.venv/bin/python -m ticket_desk` (http://localhost:8080); feed it with `cp data/tickets/samples/*.json data/tickets/inbox/` (~4 paid calls per ticket)
 
 ## Eval cost policy
 - Iterate with `--only` on the failing cases. If only the judge prompt or a case's checks changed, use `--rejudge`.
