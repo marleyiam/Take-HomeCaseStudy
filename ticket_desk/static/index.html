@@ -57,6 +57,8 @@
   .thread .msg { padding: 8px 12px; border-radius: 8px; margin-bottom: 8px; white-space: pre-wrap; }
   .thread .reviewer { background: var(--info-bg); margin-left: 15%; }
   .thread .agent { background: var(--quote); margin-right: 15%; white-space: normal; }
+  .thread .system { text-align: center; color: var(--warn); font-size: 12px; font-weight: 600; padding: 2px; }
+  .escref { margin: 10px 0 0; padding: 8px 12px; border-radius: 8px; background: var(--warn-bg); }
   .thread .who { font-size: 11px; font-weight: 600; color: var(--muted); display: block; }
   .trace li { margin-bottom: 4px; } .trace code { font-size: 12px; }
   details summary { cursor: pointer; color: var(--muted); }
@@ -87,6 +89,11 @@
 <script>
 const LABELS = { APPROVE: "Approve", DENY: "Deny", NEEDS_MANAGER_APPROVAL: "Needs manager", NEEDS_INFO: "Needs info",
                  POLICY_GAP: "Policy gap", ESCALATED: "Escalated", ANSWERED: "Answered" };
+// Escalation is offered only where the policy calls for someone else to decide.
+const ESCALATE = {
+  NEEDS_MANAGER_APPROVAL: { text: "Escalate to store manager", title: "Opens a manager-approval ticket pre-filled with the order, fee, refund and policy checks" },
+  POLICY_GAP: { text: "Escalate to ops team", title: "Opens a knowledge-gap ticket so the ops team answers and documents the policy" },
+};
 const STATUS = { drafting: "Drafting…", awaiting_review: "Awaiting review", revising: "Revising…", sent: "Sent", error: "Error" };
 let current = null, busy = false, lastList = "", lastDetail = "";
 
@@ -138,7 +145,8 @@ async function renderDetail() {
   const working = t.status === "drafting" || t.status === "revising";
   const d = t.draft;
   const trace = t.trace.map(s => `<li><code>${esc(s.tool)}</code> → ${esc(summ(s))}</li>`).join("");
-  const thread = t.thread.map(m => `<div class="msg ${m.role}"><span class="who">${m.role === "agent" ? "Assistant" : "You (reviewer)"}</span>${m.role === "agent" ? `<div class="reply">${md(m.text)}</div>` : esc(m.text)}</div>`).join("");
+  const thread = t.thread.map(m => m.role === "system" ? `<div class="msg system">${esc(m.text)}</div>`
+    : `<div class="msg ${m.role}"><span class="who">${m.role === "agent" ? "Assistant" : "You (reviewer)"}</span>${m.role === "agent" ? `<div class="reply">${md(m.text)}</div>` : esc(m.text)}</div>`).join("");
   document.getElementById("detail").innerHTML = `
     <div class="card">
       <div class="row" style="display:flex;justify-content:space-between;gap:10px;align-items:start">
@@ -152,11 +160,13 @@ async function renderDetail() {
       <blockquote>${esc(t.body)}</blockquote>
       ${working && !d ? `<p><span class="spinner"></span> The assistant is working on this ticket…</p>` : ""}
       ${d ? `<div class="reply">${md(d.reply)}</div>` : ""}
+      ${t.escalation ? `<p class="escref">${t.escalation.routed_to === "store_manager" ? "Store manager approval requested" : "Forwarded to the operations team"}: ticket <strong>${esc(t.escalation.ticket_id)}</strong>.</p>` : ""}
       ${d && d.note ? `<div class="note"><b>Note to reviewer:</b> ${esc(d.note)}</div>` : ""}
       ${t.error ? `<div class="note"><b>Error:</b> ${esc(t.error)} — send a message below to retry.</div>` : ""}
       <div class="actions">
         ${t.status === "sent" ? `<span class="chip sent">Sent ${time(t.sent_at)}</span><span class="muted">Written to data/tickets/outbox/${t.id}.json</span>`
           : `<button class="primary" onclick="approve()" ${t.status !== "awaiting_review" || !d ? "disabled" : ""}>Approve &amp; send</button>
+             ${ESCALATE[t.label] && !t.escalation ? `<button onclick="escalate()" ${t.status !== "awaiting_review" ? "disabled" : ""} title="${ESCALATE[t.label].title}">${ESCALATE[t.label].text}</button>` : ""}
              ${working ? `<span class="muted"><span class="spinner"></span> ${STATUS[t.status]}</span>` : `<span class="muted">or ask for changes below</span>`}`}
       </div>
     </div>
@@ -190,6 +200,11 @@ async function send(e) {
   const p = api(`/api/tickets/${current}/messages`, { method: "POST", body: JSON.stringify({ text }) });
   setTimeout(renderDetail, 300);  // shows the "revising" state while the assistant works
   try { await p; } catch (err) { alert(err.message); } finally { busy = false; }
+  await renderDetail(); await refreshList();
+}
+
+async function escalate() {
+  try { await api(`/api/tickets/${current}/escalate`, { method: "POST" }); } catch (err) { alert(err.message); }
   await renderDetail(); await refreshList();
 }
 

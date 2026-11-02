@@ -185,5 +185,6 @@ def create_escalation_ticket(
     config.ESCALATIONS_PATH.parent.mkdir(parents=True, exist_ok=True)
     with config.ESCALATIONS_PATH.open("a") as f:
         f.write(json.dumps(ticket) + "\n")
-    return {"status": "created", "ticket_id": ticket["ticket_id"], "routed_to": ticket["routed_to"],
+    return {"status": "created", "ticket_id": ticket["ticket_id"], "escalation_type": escalation_type,
+            "routed_to": ticket["routed_to"],
             "expected_response": "within 4 business hours"}

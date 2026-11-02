@@ -12,7 +12,9 @@ from google.genai import types
 from novamart_assistant import config
 from novamart_assistant.agent import ticket_agent
 
-from .store import TicketStore, derive_label, now, parse_ticket_request
+from novamart_assistant.tools import create_escalation_ticket
+
+from .store import TicketStore, build_escalation, derive_label, now, parse_ticket_request
 
 log = logging.getLogger("ticket_desk")
 APP_NAME, USER_ID = "ticket_desk", "ops_team"
@@ -65,8 +67,34 @@ class TicketDesk:
             ticket["thread"].append({"role": "reviewer", "text": text, "at": now()})
             ticket["status"] = "revising"
             self.store.save(ticket)
-        await self._run_agent(ticket_id, f"REVIEWER: {text}")
+        message = f"REVIEWER: {text}"
+        if ticket.get("escalation"):  # escalations made with the button happen outside the agent's session
+            esc = ticket["escalation"]
+            message = f"(Context: escalation {esc['ticket_id']} is already open, routed to {esc['routed_to']}.)\n{message}"
+        await self._run_agent(ticket_id, message)
         return self.store.get(ticket_id)
+
+    async def escalate(self, ticket_id: str) -> dict:
+        """The reviewer's Escalate button: opens the escalation in code, with facts from the tool results."""
+        async with self.locks[ticket_id]:
+            ticket = self.store.get(ticket_id)
+            if ticket["status"] != "awaiting_review":
+                raise ValueError(f"ticket {ticket_id} is {ticket['status']}, not awaiting review")
+            result = create_escalation_ticket(**build_escalation(ticket))
+            if result.get("status") != "created":
+                raise ValueError(result.get("message", "escalation failed"))
+            self._record_escalation(ticket, result)
+            ticket["trace"].append({"tool": "create_escalation_ticket", "result": result, "at": now()})
+            ticket["thread"].append({"role": "system", "at": now(),
+                                     "text": f"Escalated by the reviewer: {result['ticket_id']} → {result['routed_to'].replace('_', ' ')}."})
+            ticket["label"] = derive_label(ticket["trace"], ticket["draft"]["outcome"], ticket["draft"]["reply"])
+            self.store.save(ticket)
+            return ticket
+
+    @staticmethod
+    def _record_escalation(ticket: dict, result: dict) -> None:
+        ticket["escalation"] = {"ticket_id": result["ticket_id"], "type": result.get("escalation_type"),
+                                "routed_to": result["routed_to"], "created_at": now()}
 
     async def approve(self, ticket_id: str) -> dict:
         async with self.locks[ticket_id]:
@@ -103,6 +131,9 @@ class TicketDesk:
 
             ticket = self.store.get(ticket_id)
             ticket["trace"].extend(steps)
+            for step in steps:  # the reviewer may also ask the agent to escalate in chat
+                if step["tool"] == "create_escalation_ticket" and step["result"].get("status") == "created":
+                    self._record_escalation(ticket, step["result"])
             if text.strip():
                 ticket["thread"].append({"role": "agent", "text": text.strip(), "at": now()})
             if submitted is None and not ticket["draft"]:

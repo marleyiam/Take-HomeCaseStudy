@@ -55,10 +55,59 @@ def derive_label(trace: list[dict], declared_outcome: str, reply: str) -> str:
 
 
 def compose_outgoing(ticket: dict) -> str:
-    """The message the store receives: their request quoted verbatim (by code, not the LLM), then the reply."""
+    """The message the store receives: their request quoted verbatim (by code, not the LLM), then the reply,
+    then the escalation reference if one was opened."""
     quoted = "\n".join(f"> {line}" if line else ">" for line in ticket["body"].splitlines())
     reply = ticket["draft"]["reply"] if ticket.get("draft") else ""
-    return f"Re: {ticket['subject']}\n\n{ticket['from']} wrote:\n{quoted}\n\n{reply}\n\n— NovaMart Operations"
+    escalation = ticket.get("escalation")
+    reference = ""
+    if escalation:
+        what = ("Store manager approval requested" if escalation["routed_to"] == "store_manager"
+                else "Forwarded to the operations team")
+        reference = f"\n\n{what}: ticket {escalation['ticket_id']}."
+    return f"Re: {ticket['subject']}\n\n{ticket['from']} wrote:\n{quoted}\n\n{reply}{reference}\n\n— NovaMart Operations"
+
+
+# Which escalation the reviewer's Escalate button opens, by queue label.
+ESCALATION_FOR_LABEL = {"NEEDS_MANAGER_APPROVAL": "manager_approval", "POLICY_GAP": "knowledge_gap"}
+
+
+def build_escalation(ticket: dict) -> dict:
+    """Arguments for create_escalation_ticket, built from the ticket's tool results rather than by the LLM,
+    so the facts the manager sees are exactly what the order system and the rules engine returned."""
+    kind = ESCALATION_FOR_LABEL.get(ticket.get("label"))
+    if ticket.get("escalation"):
+        raise ValueError(f"already escalated as {ticket['escalation']['ticket_id']}")
+    if not kind:
+        raise ValueError(f"tickets labelled {ticket.get('label')} are not escalated")
+    results = [(s["tool"], s.get("result") or {}) for s in ticket["trace"]]
+    decision = next((r for t, r in reversed(results) if t == "check_return_eligibility" and r.get("status") == "decided"), None)
+    order = next((r["order"] for t, r in reversed(results) if t == "get_order_status" and r.get("status") == "found"), None)
+    request = f"{ticket['subject']} (from {ticket['from']}): {ticket['body']}"
+
+    if kind == "manager_approval" and decision:
+        facts = [
+            f"Item: {decision['item']} ({decision['sku']}), price ${decision['item_price']:.2f}",
+            f"{decision['days_since_delivery']} days since delivery",
+            f"Restocking fee ${decision['restocking_fee']:.2f}; refund ${decision['refund_amount']:.2f} "
+            f"via {decision['refund_method']}",
+            f"Rules engine decision: {decision['decision']}",
+            *decision["reasons"],
+            "Policy: " + ", ".join(decision["policy_refs"]),
+        ]
+        # Written for the manager: the rules engine's next_steps are addressed to the store employee.
+        action = (f"Approve or decline the ${decision['refund_amount']:.2f} refund. "
+                  "The store has been told not to promise it to the customer until you decide.")
+    elif kind == "manager_approval":
+        facts = [f"Draft reply: {ticket['draft']['reply']}"]  # no rules decision to quote: give the reasoning instead
+        action = "Review the request and approve or decline."
+    else:
+        searched = sorted({c for t, r in results if t == "search_policies" for c in r.get("citations", [])})
+        facts = ["No NovaMart policy answers this question.",
+                 "Closest policy sections searched: " + (", ".join(searched) or "none")]
+        action = "Answer the store, then add the missing policy to the documentation."
+    return {"escalation_type": kind, "customer_request": request, "facts_checked": "\n".join(facts),
+            "recommended_action": action, "order_id": order["order_id"] if order else ""}
 
 
 class TicketStore:
@@ -80,7 +129,7 @@ class TicketStore:
         ticket = {
             "id": self.next_id(), **request, "source": source, "received_at": now(),
             "status": "drafting", "label": None, "draft": None, "drafts": [],
-            "thread": [], "trace": [], "sent_at": None, "error": None,
+            "thread": [], "trace": [], "escalation": None, "sent_at": None, "error": None,
         }
         self.save(ticket)
         return ticket

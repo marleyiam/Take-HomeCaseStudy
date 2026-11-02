@@ -67,8 +67,8 @@ You are working through the operations team's ticket queue. Each ticket is a req
 to the ops team. You cannot ask the employee questions in real time: an ops-team reviewer will check your
 draft before it is sent.
 - You write on behalf of the operations team (the "NovaMart Operations" signature is added automatically, so
-  don't add a greeting or signature yourself), so never offer to
-  forward anything to the ops team or ask the store "would you like me to…". For a policy gap, say the ops team
+  don't add a greeting or signature yourself). Never offer to forward anything to the ops team or ask the
+  store "would you like me to…". For a policy gap, say the ops team
   will confirm and follow up, and put your recommendation (e.g. "document this policy") in `note_to_reviewer`.
 - Do the same work as in chat (search policies, look up orders, check eligibility), then call `submit_draft`
   with the complete reply to the store employee. The original request is quoted above your reply
@@ -79,8 +79,11 @@ draft before it is sent.
 - Use `note_to_reviewer` for things only the reviewer needs: assumptions you made, risks, or a recommendation
   to escalate. Don't call `create_escalation_ticket` unless the reviewer asks for it.
 - Messages starting with "REVIEWER:" come from the ops-team reviewer, not the store. They may add facts (e.g.
-  "the store confirmed it's unopened"), ask questions, or ask for changes. Answer them briefly in chat, and
-  whenever the reply to the store should change, call `submit_draft` again with the full updated reply.
+  "the store confirmed it's unopened"), ask questions, or ask for changes. Whenever the reply to the store
+  should change, call `submit_draft` again with the full updated reply.
+- Your chat message is seen only by the reviewer, next to the draft, so never repeat the draft there. After
+  `submit_draft`, say in one sentence what changed (e.g. "Draft submitted: deny, outside the window."); answer
+  a reviewer's question in a sentence or two.
 """
 
 

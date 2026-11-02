@@ -77,6 +77,15 @@ async def reviewer_message(ticket_id: str, message: ReviewerMessage):
     return await desk.reviewer_message(ticket_id, message.text.strip())
 
 
+@app.post("/api/tickets/{ticket_id}/escalate")
+async def escalate(ticket_id: str):
+    _get(ticket_id)
+    try:
+        return await desk.escalate(ticket_id)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
 @app.post("/api/tickets/{ticket_id}/approve")
 async def approve(ticket_id: str):
     _get(ticket_id)

@@ -5,7 +5,8 @@ import json
 import pytest
 
 from novamart_assistant.prompts import DECLINE_PHRASE
-from ticket_desk.store import TicketStore, compose_outgoing, derive_label, parse_ticket_request
+from novamart_assistant.tools import check_return_eligibility, get_order_status
+from ticket_desk.store import TicketStore, build_escalation, compose_outgoing, derive_label, parse_ticket_request
 
 
 def step(tool, **result):
@@ -71,3 +72,51 @@ def test_drop_in_inbox_writes_a_parseable_file(tmp_path):
     path = store.drop_in_inbox({"from": "S", "subject": "a", "body": "b"})
     assert path.parent == store.inbox
     assert parse_ticket_request(json.loads(path.read_text()))["subject"] == "a"
+
+
+def laptop_ticket(**overrides):
+    """A ticket whose trace holds the real tool results for the over-$500 laptop return."""
+    trace = [{"tool": "get_order_status", "result": get_order_status("NM-10511")},
+             {"tool": "check_return_eligibility",
+              "result": check_return_eligibility("NM-10511", "", "opened_like_new", "changed_mind")}]
+    ticket = {"subject": "Laptop return", "from": "Store #087", "body": "Opened, changed mind.",
+              "label": "NEEDS_MANAGER_APPROVAL", "trace": trace, "escalation": None,
+              "draft": {"reply": "⚠️ Needs manager approval", "outcome": "needs_manager"}}
+    return {**ticket, **overrides}
+
+
+def test_manager_escalation_is_built_from_tool_results():
+    args = build_escalation(laptop_ticket())
+    assert args["escalation_type"] == "manager_approval"
+    assert args["order_id"] == "NM-10511"
+    # The numbers come from the rules engine, not from the LLM's draft.
+    assert "refund $1019.15" in args["facts_checked"]
+    assert "Restocking fee $179.85" in args["facts_checked"]
+    assert "manager-approvals-and-escalation › Situations that need a store manager" in args["facts_checked"]
+    assert "Approve or decline the $1019.15 refund" in args["recommended_action"]
+    assert "Call the store manager" not in args["recommended_action"]  # addressed to the manager, not the store
+
+
+def test_policy_gap_escalation_lists_the_sections_searched():
+    ticket = laptop_ticket(label="POLICY_GAP", trace=[{"tool": "search_policies",
+                                                        "result": {"citations": ["price-match › Who we match"]}}])
+    args = build_escalation(ticket)
+    assert args["escalation_type"] == "knowledge_gap"
+    assert "price-match › Who we match" in args["facts_checked"]
+    assert args["order_id"] == ""
+
+
+@pytest.mark.parametrize("overrides", [
+    {"label": "DENY"},                                   # nothing to escalate
+    {"escalation": {"ticket_id": "ESC-1", "routed_to": "store_manager"}},  # already escalated
+])
+def test_escalation_is_refused_when_it_does_not_apply(overrides):
+    with pytest.raises(ValueError):
+        build_escalation(laptop_ticket(**overrides))
+
+
+def test_outgoing_message_carries_the_escalation_reference():
+    ticket = laptop_ticket(escalation={"ticket_id": "ESC-ABC123", "routed_to": "store_manager"})
+    message = compose_outgoing(ticket)
+    assert "Store manager approval requested: ticket ESC-ABC123." in message
+    assert message.index("ESC-ABC123") < message.index("— NovaMart Operations")
